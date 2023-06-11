@@ -1,0 +1,40 @@
+# MacOS
+**/.DS_Store
+
+# Python
+**/__pycache__
+
+# Jupyter Notebook
+**/.ipynb_checkpoints
+
+# Jupyter Book
+notebooks/_build
+
+# playground
+/playground
+
+# temporary directory
+**/tmp
+
+# configuration files
+config.toml
+.env
+
+# auxiliary files when compiling LaTeX 
+tex/*.aux
+tex/*.bbl
+tex/*.bcf
+tex/*.blg
+tex/*.fdb_latexmk
+tex/*.fls
+tex/*.log
+tex/*.out
+tex/*.run.xml
+tex/*.synctex.gz
+tex/*.toc
+tex/*.idx
+tex/*.ind
+tex/*.ilg
+
+# nohup .out file
+**/*.out
