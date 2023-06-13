@@ -1,16 +1,20 @@
 import os
-from typing import Self, Optional, Callable
+from uuid import UUID
+from typing import Self, Optional, Iterable
 from warnings import warn
 from collections import namedtuple
-from qdrant_client import QdrantClient
+import qdrant_client
 from qdrant_client.models import (
     VectorParams, 
     Distance, 
-    PointStruct
+    PointStruct,
+    Batch
 )
 
-from natia.kb.document import Document
+from ...document import Document, DocumentID
 from ..base import BaseVectorDatabaseClient
+from ..doc2vec.doc2text import Document2TextTransformer
+from ..doc2vec.base import BaseEmbeddingModel
 
 # information of the collection
 CollectionInfo = namedtuple(
@@ -21,7 +25,8 @@ CollectionInfo = namedtuple(
         'metric'
     )
 )
-class Qdrant(BaseVectorDatabaseClient, QdrantClient):
+
+class QdrantClient(BaseVectorDatabaseClient, qdrant_client.QdrantClient):
     
     def __init__(self, *args, **kwargs):
         
@@ -39,10 +44,21 @@ class Qdrant(BaseVectorDatabaseClient, QdrantClient):
         return self._collection_name
     
     @property
-    def embed_func(self) -> Callable:
+    def collections(self) -> list[str]:
+        """Names of existing collections in the database.
+        """
         
-        return
-    
+        # get a list of cellection descriptions
+        collections = self.get_collections().collections
+        
+        # extract collection names
+        collection_names = list(map(
+            lambda collection: collection.name,
+            collections
+        ))
+        
+        return collection_names
+     
     @classmethod
     def connect_to_host_port(cls, host: str, port: int) -> Self:
         """Connect to database via host and port.
@@ -82,31 +98,42 @@ class Qdrant(BaseVectorDatabaseClient, QdrantClient):
             path=dir
         )
         
-    def open_collection(self, collection_name: str) -> Self:
+    def open_collection(
+            self, 
+            collection_name: str,
+            document2text_transformer: Document2TextTransformer,
+            embedding_model: BaseEmbeddingModel,
+            do_create: bool = True,
+            metric: Distance = Distance.COSINE
+        ) -> Self:
         
-        assert collection_name in self.collections, \
-            f"collection '{collection_name}' does not exists"
+        # handle the situation where the collection does not exist
+        if not self.does_collection_exist(collection_name):
             
+            # create a collection if it does not exist
+            if do_create:
+            
+                self.create_collection(
+                    collection_name=collection_name,
+                    embedding_model=embedding_model,
+                    metric=metric,
+                    do_recreate=False,
+                    do_warn=False
+                )
+            
+            else:
+                raise RuntimeError(f"collection '{collection_name}' does not exists")
+        
+        # set collection name
         self._collection_name = collection_name
         
+        # set a transformer that transform a document to text
+        # and the embedding model
+        self._document2text_transformer = document2text_transformer
+        self._embedding_model = embedding_model
+        
         return self
-    
-    @property
-    def collections(self) -> list[str]:
-        """Names of existing collections in the database.
-        """
-        
-        # get a list of cellection descriptions
-        collections = self.get_collections().collections
-        
-        # extract collection names
-        collection_names = list(map(
-            lambda collection: collection.name,
-            collections
-        ))
-        
-        return collection_names
-        
+
     def does_collection_exist(self, collection_name: str) -> bool:
         """Check whether the given collection exists in the database.
 
@@ -123,9 +150,8 @@ class Qdrant(BaseVectorDatabaseClient, QdrantClient):
     
     def create_collection(
             self, 
-            name: str, 
-            vec_dim: int,
-            embed_func: Callable,
+            collection_name: str,
+            embedding_model: BaseEmbeddingModel,
             metric: Distance = Distance.COSINE,
             do_recreate: bool = False,
             do_warn: bool = False
@@ -149,29 +175,29 @@ class Qdrant(BaseVectorDatabaseClient, QdrantClient):
         """
         
         # set the function to create a collection
-        create_collection_func = QdrantClient.create_collection
+        create_collection_func = qdrant_client.QdrantClient.create_collection
         
-        if self.does_collection_exist(name):
+        if self.does_collection_exist(collection_name):
             
             # do nothing if the collection already exists
             if not do_recreate:
                 
                 # print warning message if required
                 if do_warn:
-                    warn(f"the collection '{name}' already exists")
+                    warn(f"the collection '{collection_name}' already exists")
                     
                 return
             
             # need to create the collection, 
             # and hence change the creation function
-            create_collection_func = QdrantClient.recreate_collection
+            create_collection_func = qdrant_client.QdrantClient.recreate_collection
         
         # use qdrant_client's API to create a collection
         create_collection_func(
             self,
-            collection_name=name,
+            collection_name=collection_name,
             vectors_config=VectorParams(
-                size=vec_dim, 
+                size=embedding_model.vec_dim, 
                 distance=metric
             ),
         )
@@ -211,14 +237,73 @@ class Qdrant(BaseVectorDatabaseClient, QdrantClient):
     
     def insert_document(self, document: Document) -> None:
         
+        # get text content
+        text = self._document2text_transformer.transform(document)
+        
+        # do nothing if the text cannot be extracted from the document
+        if text is None:
+            return
+        
+        # insert into vector database
         self.upsert(
             collection_name=self.collection_name,
             points=[
                 PointStruct(
-                    id=document.id.value,
-                    vector=self.embed_func(document.text)
+                    id=str(document.id.to_uuid()),
+                    vector=self._embedding_model.embed_text(text)
                 )
             ]
         )
-        return super().insert_document(document)
+    
+    def insert_documents(self, documents: Iterable[Document]) -> None:
+        
+        # get text contents
+        texts = self._document2text_transformer.transform(documents)
+        
+        # IDs of the documents that have text contents
+        # and then convert to strings
+        document_ids = self._document2text_transformer.document_ids
+        document_ids = list(map(
+            lambda document_id: str(document_id.to_uuid()), 
+            document_ids
+        ))
+        
+        # vector embeddings of text contents
+        vectors = self._embedding_model.embed_texts(texts)
+        
+        # bulk insert into vector database
+        self.upsert(
+            collection_name=self.collection_name,
+            points=Batch(
+                ids=document_ids,
+                vectors=vectors
+            )
+        )
+
+    def retrieve_similar_document_ids(
+            self, 
+            query: str,
+            n_similar_documents: int
+        ) -> list[DocumentID]:
+        
+        # get the embedding vector of the query
+        query_vector = self._embedding_model.embed_text(query)
+        
+        # get points with scores
+        scored_points = self.search(
+            collection_name=self.collection_name,
+            query_vector=query_vector,
+            limit=n_similar_documents,
+            with_payload=False,
+            with_vectors=False
+        )
+        
+        # extract document IDs
+        document_ids = list(map(
+            lambda point: DocumentID(UUID(point.id)),
+            scored_points
+        ))
+        
+        return document_ids
+        
     

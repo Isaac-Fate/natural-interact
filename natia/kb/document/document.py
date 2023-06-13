@@ -1,23 +1,19 @@
 from typing import Any, Self, Optional
 from .id import DocumentID
 
-class Document:
+class Document(dict):
     
-    def __init__(self, text: str, meta: Optional[Any] = None) -> None:
+    KEY_OF_TEXT = 'text'
+    
+    def __init__(self, *args, **kwargs) -> None:
+        
+        super().__init__(*args, **kwargs)
         
         self._id = None
-        self._text = text
-        self._meta = meta
-    
-    def __str__(self) -> str:
-        return f'Document(id: {self.id}, text: {self.text}, meta: {self.meta})'
-    
-    def __repr__(self) -> str:
-        return str(self)
+        self._text = None
     
     @property
     def id(self) -> Optional[DocumentID]:
-        
         return self._id
     
     @id.setter
@@ -27,64 +23,27 @@ class Document:
         self._id = new_id
     
     @property
-    def text(self) -> str:
+    def text(self) -> Optional[str]:
         
-        return self._text
-    
-    @property
-    def meta(self) -> Optional[Any]:
-        
-        return self._meta
+        return self.get_text()
     
     @classmethod
-    def from_dict(
-            cls, 
-            document: dict,
-            key_of_text: str = 'text',
-            use_meta: bool = True
-        ) -> Self:
-        
-        # get the text value from the dict
-        text = document.get(key_of_text, None)
-        
-        assert text is not None, \
-            f"the value of '{key_of_text}' cannot be None"
-        
-        # make a copy and remove the text
-        document = document.copy()
-        document.pop(key_of_text)
-        
-        # get meta data
-        
-        # directly use the value of the 'meta' key of the dict
-        if use_meta:
-            
-            # the the value of meta
-            meta = document.get('meta', None)
-            
-            # create the document if meta is not None
-            if meta is not None:
-                return cls(text=text, meta=meta)
-        
-        # the meta data of the document is 
-        # all the rest objects contained in the dict 
-        meta = document
-        
-        # set the meta None if its value is an empty dict
-        if len(meta) == 0:
-            meta = None
-        
-        return cls(text=text, meta=meta)
+    def from_dict(cls, document: dict) -> Self:
+        document = cls(document)
+        return document
+    
+    def get_text(self) -> Optional[str]:
+        return self.get(self.KEY_OF_TEXT, None)
             
     def to_dict(self, with_id: bool = False) -> dict:
         
-        document_dict = dict(
-            text=self.text,
-            meta=self.meta
-        )
+        document_dict = self.copy()
         
         if with_id:
-            document_dict['id'] = self.id.value
+            if self.id is None:
+                document_dict['id'] = None
+            else:
+                document_dict['id'] = self.id.value
             
         return document_dict
     

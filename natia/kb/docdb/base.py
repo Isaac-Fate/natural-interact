@@ -1,13 +1,48 @@
-from abc import (
-    ABC, 
-    abstractmethod
-)
-from ..document import Document
+from abc import ABC, abstractmethod
+from typing import Optional, Iterable
+from ..document import Document, DocumentID
 
 class BaseDocumentDatabaseClient(ABC):
     
+    @property
     @abstractmethod
-    def insert_document(self, document: Document) -> None:
+    def collection_name(self) -> str:
         pass
     
+    @abstractmethod
+    def insert_document(self, document: Document) -> DocumentID:
+        pass
     
+    @abstractmethod
+    def insert_documents(self, documents: Iterable[Document]) -> list[DocumentID]:
+        pass
+    
+    @abstractmethod
+    def find_document_by_id(self, id: DocumentID) -> Optional[Document]:
+        """Find one document in the databae by its ID.
+
+        Parameters
+        ----------
+            id (DocumentID): Document ID.
+
+        Returns
+        -------
+            Optional[Document]: None if no ducument is found.
+        """
+        pass
+    
+    @abstractmethod
+    def find_documents_by_ids(self, ids: Iterable[DocumentID]) -> list[Document]:
+        """Find one document in the databae by its ID.
+
+        Parameters
+        ----------
+            ids (Iterable[DocumentID]): Document IDs.
+            If a list of IDs is passed in,
+            then the documents to find will be returned in the same order.
+
+        Returns
+        -------
+            list[Document]: An empty list if no ducument is found.
+        """
+        pass

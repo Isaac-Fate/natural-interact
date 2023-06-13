@@ -20,6 +20,10 @@ notebooks/_build
 config.toml
 .env
 
+# built files for distribution
+dist
+*.egg-info
+
 # auxiliary files when compiling LaTeX 
 tex/*.aux
 tex/*.bbl

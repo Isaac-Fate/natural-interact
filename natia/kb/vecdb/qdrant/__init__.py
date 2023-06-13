@@ -1,4 +1,4 @@
-from .qdrant import QdrantClient
+from .client import QdrantClient
 
 __all__ = [
     'QdrantClient'
