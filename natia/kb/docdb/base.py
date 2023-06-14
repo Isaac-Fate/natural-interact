@@ -18,6 +18,26 @@ class BaseDocumentDatabaseClient(ABC):
         pass
     
     @abstractmethod
+    def find_document(self, *args, **kwargs) -> Optional[Document]:
+        """Find one document in the database satisfying some requirements.
+
+        Returns
+        -------
+            Optional[Document]: None if no ducument is found.
+        """
+        pass
+    
+    @abstractmethod
+    def find_documents(self, *args, **kwargs) -> list[Document]:
+        """Find all documents in the databae satisfying some requirements.
+
+        Returns
+        -------
+            list[Document]: An empty list if no ducument is found.
+        """
+        pass
+    
+    @abstractmethod
     def find_document_by_id(self, id: DocumentID) -> Optional[Document]:
         """Find one document in the databae by its ID.
 
@@ -31,7 +51,6 @@ class BaseDocumentDatabaseClient(ABC):
         """
         pass
     
-    @abstractmethod
     def find_documents_by_ids(self, ids: Iterable[DocumentID]) -> list[Document]:
         """Find one document in the databae by its ID.
 
@@ -45,4 +64,14 @@ class BaseDocumentDatabaseClient(ABC):
         -------
             list[Document]: An empty list if no ducument is found.
         """
+        
+        documents = []
+        for id in ids:
+            document = self.find_document_by_id(id)
+            documents.append(document)
+        
+        return documents
+    
+    @abstractmethod
+    def drop_collection(self, collection_name: str) -> None:
         pass

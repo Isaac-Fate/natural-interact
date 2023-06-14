@@ -12,7 +12,6 @@ class MongoDBClient(BaseDocumentDatabaseClient, pymongo.MongoClient):
     
     def __init__(self, *args, **kwargs) -> None:
         
-        # initialize super class
         super().__init__(*args, **kwargs)
         
         self._database = None
@@ -43,13 +42,23 @@ class MongoDBClient(BaseDocumentDatabaseClient, pymongo.MongoClient):
         
         return client
     
-    def open_database_collection(
+    def open_database(
             self,
-            database_name: str,
-            collection_name: str
+            database_name: str
         ) -> Self:
         
         self._database = self.get_database(database_name)
+        
+        return self
+    
+    def open_collection(
+            self,
+            collection_name: str
+        ) -> Self:
+        
+        if self._database is None:
+            raise RuntimeError('no database is opened')
+        
         self._collection = self._database.get_collection(collection_name)
         
         return self
@@ -59,7 +68,12 @@ class MongoDBClient(BaseDocumentDatabaseClient, pymongo.MongoClient):
         inserted_id = DocumentID(inserted_result.inserted_id)
         return inserted_id
         
-    def insert_documents(self, documents: Iterable[Document]):
+    def insert_documents(self, documents: Iterable[Document]) -> list[DocumentID]:
+        
+        # stop here if there is no document to insert
+        if len(documents) == 0:
+            return []
+        
         inserted_result = self._collection.insert_many(documents)
         inserted_ids = list(map(
             DocumentID,
@@ -129,5 +143,13 @@ class MongoDBClient(BaseDocumentDatabaseClient, pymongo.MongoClient):
                 documents.append(document)
         
         return documents
+    
+    def drop_collection(self, collection_name: str) -> None:
+        
+        if self._database is None:
+            raise RuntimeError('no database is opened')
+        
+        self._database.drop_collection(collection_name)
+      
         
     

@@ -1,4 +1,5 @@
 import unittest
+from natia.kb.docdb import MongoDBClient
 
 class DocumentDatabaseTester(unittest.TestCase):
     

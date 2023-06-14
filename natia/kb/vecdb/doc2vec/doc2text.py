@@ -20,6 +20,21 @@ class Document2TextTransformer(BaseEstimator, TransformerMixin):
             self, 
             document_or_documents: Document | Iterable[Document]
         ) -> Optional[str] | list[str]:
+        """Transform each document its text content.
+
+        Parameters
+        ----------
+            document_or_documents (Document | Iterable[Document]): A single document
+            or multiple documents.
+
+        Returns
+        -------
+            Optional[str] | list[str]: 
+            - If a single document is passed in, 
+            then a string of its text content will be returned.
+            - If multiple documents are passed in, 
+            then a list of text contents will be returned.
+        """
         
         if isinstance(document_or_documents, Document):
             document = document_or_documents

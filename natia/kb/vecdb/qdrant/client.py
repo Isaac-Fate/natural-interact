@@ -8,7 +8,8 @@ from qdrant_client.models import (
     VectorParams, 
     Distance, 
     PointStruct,
-    Batch
+    Batch,
+    PointIdsList
 )
 
 from ...document import Document, DocumentID
@@ -235,14 +236,17 @@ class QdrantClient(BaseVectorDatabaseClient, qdrant_client.QdrantClient):
         
         return CollectionInfo(name=collection_name, vec_dim=vec_dim, metric=metric)
     
-    def insert_document(self, document: Document) -> None:
+    def upsert_document(self, document: Document) -> Optional[DocumentID]:
+        
+        if document.id is None:
+            return None
         
         # get text content
         text = self._document2text_transformer.transform(document)
         
         # do nothing if the text cannot be extracted from the document
         if text is None:
-            return
+            return None
         
         # insert into vector database
         self.upsert(
@@ -254,16 +258,29 @@ class QdrantClient(BaseVectorDatabaseClient, qdrant_client.QdrantClient):
                 )
             ]
         )
+        
+        return document.id
     
-    def insert_documents(self, documents: Iterable[Document]) -> None:
+    def upsert_documents(
+            self, 
+            documents: Iterable[Document]
+        ) -> list[DocumentID]:
+        
+        # filter out those documents without IDs
+        documents = self.filter_out_documents_without_ids(documents)
         
         # get text contents
         texts = self._document2text_transformer.transform(documents)
         
         # IDs of the documents that have text contents
-        # and then convert to strings
         document_ids = self._document2text_transformer.document_ids
-        document_ids = list(map(
+        
+        # stop here if there is no document to insert
+        if len(document_ids) == 0:
+            return []
+        
+        # convert to strings
+        document_ids_as_strs = list(map(
             lambda document_id: str(document_id.to_uuid()), 
             document_ids
         ))
@@ -275,8 +292,35 @@ class QdrantClient(BaseVectorDatabaseClient, qdrant_client.QdrantClient):
         self.upsert(
             collection_name=self.collection_name,
             points=Batch(
-                ids=document_ids,
+                ids=document_ids_as_strs,
                 vectors=vectors
+            )
+        )
+        
+        return document_ids
+        
+    def delete_document_by_id(self, id: DocumentID) -> None:
+        
+        self.delete(
+            collection_name=self.collection_name,
+            points_selector=PointIdsList(
+                points=[str(id.to_uuid())]
+            )
+        )
+    
+    def delete_documents_by_ids(self, ids: Iterable[DocumentID]) -> None:
+        
+        # convert IDs to a list of UUID strings
+        document_ids = list(map(
+            lambda document_id: str(document_id.to_uuid()),
+            ids
+        ))
+        
+        # delete from database
+        self.delete(
+            collection_name=self.collection_name,
+            points_selector=PointIdsList(
+                points=document_ids
             )
         )
 
@@ -306,4 +350,9 @@ class QdrantClient(BaseVectorDatabaseClient, qdrant_client.QdrantClient):
         
         return document_ids
         
+    def drop_collection(self, collection_name: str) -> None:
+        
+        self.delete_collection(
+            collection_name=collection_name
+        )
     
