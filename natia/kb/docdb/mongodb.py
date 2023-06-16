@@ -4,7 +4,11 @@ from typing import (
     Optional,
     Iterable
 )
+from itertools import filterfalse
+from natia.kb.document import DocumentID
 import pymongo
+from pymongo.database import Database
+from pymongo.collection import Collection
 from .base import BaseDocumentDatabaseClient
 from ..document import Document, DocumentID
 
@@ -14,8 +18,8 @@ class MongoDBClient(BaseDocumentDatabaseClient, pymongo.MongoClient):
         
         super().__init__(*args, **kwargs)
         
-        self._database = None
-        self._collection = None
+        self._database: Optional[Database] = None
+        self._collection: Optional[Collection] = None
     
     @property
     def collection_name(self) -> str:
@@ -62,23 +66,26 @@ class MongoDBClient(BaseDocumentDatabaseClient, pymongo.MongoClient):
         self._collection = self._database.get_collection(collection_name)
         
         return self
-    
-    def insert_document(self, document: Document) -> DocumentID:
-        inserted_result = self._collection.insert_one(document)
-        inserted_id = DocumentID(inserted_result.inserted_id)
-        return inserted_id
         
     def insert_documents(self, documents: Iterable[Document]) -> list[DocumentID]:
+        
+        # filter out those documents that have IDs
+        # since they are already in the collection
+        documents = self.filter_out_documents_with_ids(documents)
         
         # stop here if there is no document to insert
         if len(documents) == 0:
             return []
         
-        inserted_result = self._collection.insert_many(documents)
+        # get insertion result from MongoDB
+        insertion_result = self._collection.insert_many(documents)
+        
+        # convert to document IDs
         inserted_ids = list(map(
             DocumentID,
-            inserted_result.inserted_ids
+            insertion_result.inserted_ids
         ))
+        
         return inserted_ids
         
     def find_document(self, filter: Optional[Any] = None) -> Optional[Document]:
@@ -125,6 +132,7 @@ class MongoDBClient(BaseDocumentDatabaseClient, pymongo.MongoClient):
         return documents
     
     def find_document_by_id(self, id: DocumentID) -> Optional[Document]:
+        
         return self.find_document(id.to_objectid())
     
     def find_documents_by_ids(self, ids: Iterable[DocumentID]) -> list[Document]:
@@ -143,6 +151,78 @@ class MongoDBClient(BaseDocumentDatabaseClient, pymongo.MongoClient):
                 documents.append(document)
         
         return documents
+    
+    def update_documents(
+            self, 
+            documents: Iterable[Document],
+            do_insert: bool = True
+        ) -> list[DocumentID]:
+        
+        document_ids: list[DocumentID] = []
+        
+        for document in documents:
+            
+            # the document is not in the collection yet
+            if document.id is None:
+                if do_insert:
+                    document_id = self.insert_document(document)
+                    if document_id is not None:
+                        document_ids.append(document_id)
+                else:
+                    continue
+            
+            # update the document
+            self._collection.update_one(
+                filter={
+                    '_id': document.id.to_objectid()
+                },
+                update={
+                    '$set': document
+                }
+            )
+            
+            document_ids.append(document.id)
+        
+        return document_ids
+    
+    def delete_documents(
+            self, 
+            documents: Iterable[Document]
+        ) -> list[DocumentID]:
+        
+        # extract docuemnt IDs
+        document_ids = list(map(
+            lambda document: document.id, 
+            documents
+        ))
+        
+        # get deleted document IDs
+        deleted_document_ids = self.delete_documents_by_ids(document_ids)
+        
+        return deleted_document_ids
+        
+    def delete_documents_by_ids(
+            self, 
+            ids: Iterable[DocumentID]
+        ) -> list[DocumentID]:
+        
+        # get nonempty IDs
+        ids = self.filter_out_empty_document_ids(ids)
+        
+        # convert each ID to ObjectId instance
+        document_ids_as_objectids = list(map(
+            lambda id: id.to_objectid(),
+            ids
+        ))
+        
+        # delete documents
+        self._collection.delete_many({
+            '_id': {
+                '$in': document_ids_as_objectids
+            }
+        })
+        
+        return ids
     
     def drop_collection(self, collection_name: str) -> None:
         

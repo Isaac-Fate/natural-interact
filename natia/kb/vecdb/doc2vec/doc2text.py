@@ -46,7 +46,7 @@ class Document2TextTransformer(BaseEstimator, TransformerMixin):
         texts: list[str] = []
         self._document_ids: list[DocumentID] = []
         for document in documents:
-            text =  self.get_text(document)
+            text = self.get_text(document)
             if text is not None:
                 texts.append(text)
                 self._document_ids.append(document.id)

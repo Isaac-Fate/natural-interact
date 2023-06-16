@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Iterable
+from itertools import filterfalse
 from ..document import Document, DocumentID
 
 class BaseDocumentDatabaseClient(ABC):
@@ -9,13 +10,53 @@ class BaseDocumentDatabaseClient(ABC):
     def collection_name(self) -> str:
         pass
     
-    @abstractmethod
-    def insert_document(self, document: Document) -> DocumentID:
-        pass
+    @staticmethod
+    def filter_out_documents_with_ids(
+            documents: Iterable[Document]
+        ) -> list[Document]:
+        
+        documents = list(filter(
+            lambda document: document.id is None,
+            documents
+        ))
+        
+        return documents
+    
+    @staticmethod
+    def filter_out_documents_without_ids(
+            documents: Iterable[Document]
+        ) -> list[Document]:
+        
+        documents = list(filterfalse(
+            lambda document: document.id is None,
+            documents
+        ))
+        
+        return documents
+    
+    @staticmethod
+    def filter_out_empty_document_ids(
+            ids: Iterable[DocumentID]
+        ) -> list[DocumentID]:
+        
+        ids = list(filterfalse(
+            lambda id: id is None,
+            ids
+        ))
+        
+        return ids
     
     @abstractmethod
     def insert_documents(self, documents: Iterable[Document]) -> list[DocumentID]:
         pass
+    
+    def insert_document(self, document: Document) -> Optional[DocumentID]:
+        
+        document_ids = self.insert_documents([document])
+        if len(document_ids) > 0:
+            return document_ids[0]
+        else:
+            return None
     
     @abstractmethod
     def find_document(self, *args, **kwargs) -> Optional[Document]:
@@ -71,6 +112,33 @@ class BaseDocumentDatabaseClient(ABC):
             documents.append(document)
         
         return documents
+    
+    @abstractmethod
+    def update_documents(
+            self, 
+            documents: Iterable[Document],
+            do_insert: bool = True
+        ) -> list[DocumentID]:
+        pass
+
+    @abstractmethod
+    def delete_documents(
+            self, 
+            documents: Iterable[Document]
+        ) -> list[DocumentID]:
+        pass
+    
+    def delete_document(
+            self, 
+            document: Document
+        ) -> Optional[DocumentID]:
+        
+        deleted_document_ids = self.delete_documents([document])
+        
+        if len(deleted_document_ids) > 0:
+            return deleted_document_ids[0]
+        else:
+            return None
     
     @abstractmethod
     def drop_collection(self, collection_name: str) -> None:

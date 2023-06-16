@@ -308,13 +308,23 @@ class QdrantClient(BaseVectorDatabaseClient, qdrant_client.QdrantClient):
             )
         )
     
-    def delete_documents_by_ids(self, ids: Iterable[DocumentID]) -> None:
+    def delete_documents_by_ids(self, ids: Iterable[DocumentID]) -> list[DocumentID]:
+        
+        # do nothing
+        if len(ids) == 0:
+            return []
         
         # convert IDs to a list of UUID strings
         document_ids = list(map(
             lambda document_id: str(document_id.to_uuid()),
             ids
         ))
+        
+        # find actual records to delete
+        records = self.retrieve(
+            collection_name=self.collection_name,
+            ids=document_ids
+        )
         
         # delete from database
         self.delete(
@@ -323,6 +333,14 @@ class QdrantClient(BaseVectorDatabaseClient, qdrant_client.QdrantClient):
                 points=document_ids
             )
         )
+        
+       # extract IDs
+        deleted_document_ids = list(map(
+            lambda record: DocumentID(UUID(record.id)),
+            records
+        ))
+        
+        return deleted_document_ids
 
     def retrieve_similar_document_ids(
             self, 

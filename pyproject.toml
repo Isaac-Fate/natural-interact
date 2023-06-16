@@ -9,14 +9,13 @@ namespaces = false  # true by default
 
 [project]
 name = 'natia'
-version = '0.0.1'
+version = '0.0.3'
 authors = [
     {name = 'Isaac Fei', email = 'isaac.omega.fei@gmail.com'},
 ]
 description = 'Natia stands for NATural IterAction. We aim to build a toolkit that leverages LLMs.'
 readme = 'README.md'
 requires-python = '>=3.11'
-dependencies = []
 
 [project.urls]
 Homepage = 'https://github.com/Isaac-Fate/natural-interact'

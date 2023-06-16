@@ -1,4 +1,4 @@
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Type
 from itertools import filterfalse
 from .document import Document, DocumentID
 from .docdb.base import BaseDocumentDatabaseClient
@@ -101,6 +101,53 @@ class KnowledgeBaseClient:
             'doc_db': inserted_document_ids_in_doc_db,
             'vec_db': []
         }
+        
+    def update_documents(
+            self, 
+            documents: Iterable[Document],
+            do_insert: bool = True
+        ) -> dict[str, list[DocumentID]]:
+        
+        update_result = {
+            'doc_db': [],
+            'vec_db': []
+        }
+        
+        # update documents in document database
+        document_ids = self._doc_db_client.update_documents(
+            documents=documents, 
+            do_insert=do_insert
+        )
+        update_result['doc_db'] = document_ids
+        
+        # find the corresponding documents
+        documents = self._doc_db_client.find_documents_by_ids(document_ids)
+        
+        # update embedding vectors
+        self.update_document_embeddings(documents)
+        update_result['vec_db'] = document_ids
+        
+        return update_result
+        
+    def delete_documents(
+            self, 
+            documents: Iterable[Document]
+        ) -> dict[str, list[DocumentID]]:
+        
+        deletion_result = {
+            'doc_db': [],
+            'vec_db': []
+        }
+        
+        # delete from document database
+        deleted_document_ids = self._doc_db_client.delete_documents(documents)
+        deletion_result['doc_db'] = deleted_document_ids
+        
+        # delete from vector database
+        deleted_document_ids = self._vec_db_client.delete_documents_by_ids(deleted_document_ids)
+        deletion_result['vec_db'] = deleted_document_ids
+        
+        return deletion_result
 
     def retrieve_similar_documents(
             self, 
